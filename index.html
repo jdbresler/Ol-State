@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Happy Valley Picks — 2026</title>
+<title>Ol' State Pick'em — 2026</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
@@ -221,7 +221,7 @@
 <!-- STEP 1: WHO ARE YOU -->
 <div class="gate" id="gate-name">
   <div class="gate-card">
-    <div class="gate-eyebrow">Happy Valley Picks</div>
+    <div class="gate-eyebrow">Ol' State Pick'em</div>
     <div class="gate-title">🦁 Who's Picking?</div>
     <div class="name-grid" id="name-grid"></div>
   </div>
@@ -230,7 +230,7 @@
 <!-- STEP 2: PASSWORD FOR SELECTED NAME -->
 <div class="gate" id="gate-password" style="display:none;">
   <div class="gate-card">
-    <div class="gate-eyebrow" id="pw-eyebrow">Happy Valley Picks</div>
+    <div class="gate-eyebrow" id="pw-eyebrow">Ol' State Pick'em</div>
     <div class="gate-title" id="pw-title">Enter Your Password</div>
     <input type="password" id="pw-input" placeholder="Password" autocomplete="off">
     <div class="error-msg" id="pw-error"></div>
@@ -246,7 +246,7 @@
       <div class="brand">
         <div class="brand-mark">PSU</div>
         <div>
-          <div class="brand-text">Happy Valley Picks</div>
+          <div class="brand-text">Ol' State Pick'em</div>
           <div class="brand-sub">2026 Regular Season</div>
         </div>
       </div>
@@ -315,6 +315,7 @@ const ADMIN_NAME = "JB";
 const DEFAULT_AUTH = { "Bev":"bev2026", "JB":"jb2026", "WC":"wc2026", "Weav":"weav2026" };
 
 const DEFAULT_GAMES = [
+  {id:0,week:0,date:"Sat, Aug 22, 2026 (TEST GAME)",opponent:"Bedford",homeAway:"home",location:"University Park, PA — Beaver Stadium (exhibition test)",time:"12:00 PM ET",tv:"Peacock",psuLine:null,total:null,status:"scheduled",psuScore:null,oppScore:null},
   {id:1,week:1,date:"Sat, Sep 5, 2026",opponent:"Marshall",homeAway:"home",location:"University Park, PA — Beaver Stadium",time:"3:30 PM ET",tv:"FS1",psuLine:null,total:null,status:"scheduled",psuScore:null,oppScore:null},
   {id:2,week:2,date:"Sat, Sep 12, 2026",opponent:"Temple",homeAway:"away",location:"Philadelphia, PA — Lincoln Financial Field",time:"12:00 PM ET",tv:"ESPN2",psuLine:null,total:null,status:"scheduled",psuScore:null,oppScore:null},
   {id:3,week:3,date:"Sat, Sep 19, 2026",opponent:"Buffalo",homeAway:"home",location:"University Park, PA — Beaver Stadium",time:"12:00 PM ET",tv:"Big Ten Network",psuLine:null,total:null,status:"scheduled",psuScore:null,oppScore:null},
@@ -779,7 +780,7 @@ function renderStandings(){
   }
 
   html += `<div class="footer-note">
-    Happy Valley Picks · 2026 Penn State Football · 1 point for a correct spread pick, 1 point for a correct over/under pick.`;
+    Ol' State Pick'em · 2026 Penn State Football · 1 point for a correct spread pick, 1 point for a correct over/under pick.`;
   if(isAdmin){
     html += `<br><button class="danger-link" onclick="resetSeason()">Reset all lines, scores &amp; picks</button>`;
   }
