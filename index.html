@@ -647,10 +647,11 @@ async function saveScore(id){
 function renderPicks(){
   const main = document.getElementById('main-content');
   const open = games.filter(g=>g.status!=='final');
+  const completed = games.filter(g=>g.status==='final');
   let html = `<div class="section-title"><h2>Make Your Picks</h2><div class="rule"></div></div>`;
 
   if(open.length===0){
-    html += `<div class="empty-note">Season complete — no games left to pick.</div>`;
+    html += `<div class="empty-note">No open games right now.</div>`;
   }
 
   open.forEach(g=>{
@@ -716,6 +717,45 @@ function renderPicks(){
     }
     html += `</div></div>`;
   });
+
+  if(completed.length>0){
+    html += `<div class="section-title"><h2>Completed Games — Results</h2><div class="rule"></div></div>`;
+    completed.slice().reverse().forEach(g=>{
+      const ll = lineLabel(g);
+      const ats = atsResult(g);
+      const ou = ouResult(g);
+      html += `<div class="card final">
+        <div class="card-head">
+          <div class="gh-left">
+            <div class="wk">Week ${g.week}</div>
+            <div class="matchup">Penn State ${g.homeAway==='home'?'vs.':'at'} ${g.opponent}</div>
+            <div class="meta">Final: PSU ${g.psuScore} — ${g.oppScore} ${g.opponent}</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="reveal-grid" style="border-top:none;padding-top:0;">
+            <table class="reveal">
+              <tr><th>Player</th><th>Against the Spread</th><th>Over / Under</th></tr>
+              ${USERS.map(u=>{
+                const p = picks[g.id] && picks[g.id][u];
+                if(!p || !p.ats || !p.ou){
+                  return `<tr><td class="player-cell"><div class="avatar" style="width:22px;height:22px;font-size:10px;">${u.slice(0,2).toUpperCase()}</div><b>${u}</b>${u===currentUser?' (you)':''}</td>
+                    <td colspan="2"><span class="pill">No pick submitted</span></td></tr>`;
+                }
+                const atsRight = ats && ats!=='PUSH' && p.ats===ats;
+                const atsWrong = ats && ats!=='PUSH' && p.ats!==ats;
+                const ouRight = ou && ou!=='PUSH' && p.ou===ou;
+                const ouWrong = ou && ou!=='PUSH' && p.ou!==ou;
+                return `<tr><td class="player-cell"><div class="avatar in" style="width:22px;height:22px;font-size:10px;">${u.slice(0,2).toUpperCase()}</div><b>${u}</b>${u===currentUser?' (you)':''}</td>
+                  <td><span class="pill ${atsRight?'correct':(atsWrong?'incorrect':'')}">${p.ats==='PSU'?ll.psu:ll.opp}</span></td>
+                  <td><span class="pill ${ouRight?'correct':(ouWrong?'incorrect':'')}">${p.ou} ${g.total}</span></td></tr>`;
+              }).join('')}
+            </table>
+          </div>
+        </div>
+      </div>`;
+    });
+  }
 
   main.innerHTML = html;
 }
