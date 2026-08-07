@@ -335,6 +335,7 @@ let isAdmin = false;
 let auth = {};
 let games = [];
 let picks = {};
+let seasonBet = {locked:false, picks:{}};
 let activeTab = "schedule";
 let editingLine = {};
 let editingScore = {};
@@ -400,6 +401,24 @@ async function savePicks(){
   try{ await window.__fb.setDoc(window.__fb.docRef('picks'), {value: picks}); }
   catch(e){ console.error('save picks failed', e); alert('Could not save your pick — check connection and try again.'); }
 }
+async function loadSeasonBet(){
+  await waitForFirebase();
+  try{
+    const snap = await window.__fb.getDoc(window.__fb.docRef('seasonBet'));
+    if(snap.exists()) return snap.data().value;
+    const def = {locked:false, picks:{}};
+    await window.__fb.setDoc(window.__fb.docRef('seasonBet'), {value: def});
+    return def;
+  }catch(e){
+    console.error('loadSeasonBet failed', e);
+    alert('Could not connect to the database — check your internet connection and reload.');
+    return {locked:false, picks:{}};
+  }
+}
+async function saveSeasonBet(){
+  try{ await window.__fb.setDoc(window.__fb.docRef('seasonBet'), {value: seasonBet}); }
+  catch(e){ console.error('save season bet failed', e); alert('Could not save — check connection and try again.'); }
+}
 
 // ---------------- GATE LOGIC ----------------
 document.addEventListener('DOMContentLoaded', async ()=>{
@@ -446,6 +465,7 @@ async function bootData(){
   document.getElementById('main-content').innerHTML = `<div style="text-align:center;padding:60px 0;color:#5A6072;">Loading season data…</div>`;
   games = await loadGames();
   picks = await loadPicks();
+  seasonBet = await loadSeasonBet();
   render();
 }
 
@@ -506,6 +526,18 @@ function allPicksIn(gameId){
   const p = picks[gameId];
   if(!p) return false;
   return USERS.every(u => p[u] && p[u].ats && p[u].ou);
+}
+function realSeasonGames(){
+  return games.filter(g=>g.week>=1); // excludes the fictitious Week 0 test game
+}
+function actualPsuWins(){
+  return realSeasonGames().filter(g=>g.status==='final' && g.psuScore>g.oppScore).length;
+}
+function realGamesRemaining(){
+  return realSeasonGames().filter(g=>g.status!=='final').length;
+}
+function realGamesTotal(){
+  return realSeasonGames().length;
 }
 
 // ---------------- RENDER ----------------
@@ -648,7 +680,10 @@ function renderPicks(){
   const main = document.getElementById('main-content');
   const open = games.filter(g=>g.status!=='final');
   const completed = games.filter(g=>g.status==='final');
-  let html = `<div class="section-title"><h2>Make Your Picks</h2><div class="rule"></div></div>`;
+  let html = `<div class="section-title"><h2>Season Win Total</h2><div class="rule"></div></div>`;
+  html += seasonBetCardHTML();
+
+  html += `<div class="section-title"><h2>Make Your Picks</h2><div class="rule"></div></div>`;
 
   if(open.length===0){
     html += `<div class="empty-note">No open games right now.</div>`;
@@ -797,6 +832,84 @@ async function toggleLock(gameId){
   render();
 }
 
+// ---------------- SEASON WIN TOTAL BET ----------------
+function seasonBetCardHTML(){
+  const myVal = seasonBet.picks[currentUser];
+  const inCount = USERS.filter(u=>seasonBet.picks[u]!==undefined && seasonBet.picks[u]!==null).length;
+  const options = [];
+  for(let i=0;i<=12;i++) options.push(i);
+
+  let html = `<div class="card">
+    <div class="card-head">
+      <div class="gh-left">
+        <div class="wk">One Pick For The Whole Season</div>
+        <div class="matchup">Total Regular-Season Wins (0–12)</div>
+        <div class="meta">Based on Weeks 1–12 only — the Week 0 test game never counts.</div>
+      </div>
+    </div>
+    <div class="card-body">`;
+
+  if(seasonBet.locked){
+    html += `<div class="locked-note">🔒 Picks locked by admin — revealed below.</div>
+      <div class="reveal-grid">
+        <table class="reveal">
+          <tr><th>Player</th><th>Predicted Wins</th></tr>
+          ${USERS.map(u=>{
+            const v = seasonBet.picks[u];
+            return `<tr><td class="player-cell"><div class="avatar ${v!==undefined&&v!==null?'in':''}" style="width:22px;height:22px;font-size:10px;">${u.slice(0,2).toUpperCase()}</div><b>${u}</b>${u===currentUser?' (you)':''}</td>
+              <td>${v!==undefined&&v!==null?v:'<span class="pill">No pick submitted</span>'}</td></tr>`;
+          }).join('')}
+        </table>
+      </div>`;
+    if(isAdmin){
+      html += `<div class="admin-controls"><button class="small-btn ghost" onclick="toggleSeasonLock()">🔓 Unlock (allow changes)</button></div>`;
+    }
+  } else {
+    html += `<div class="pick-group-label">Your Predicted Win Total</div>
+      <div class="pick-options" style="flex-wrap:wrap;">
+        ${options.map(n=>`<button class="pick-opt" style="flex:0 0 auto;min-width:44px;text-align:center;${myVal===n?'border-color:var(--navy);background:#EAF0FB;':''}" onclick="setSeasonPick(${n})">
+          <div class="po-title">${n}</div>
+        </button>`).join('')}
+      </div>
+      <div class="save-row">
+        <button class="btn" style="width:auto;" onclick="submitSeasonPick()">Save My Pick</button>
+      </div>
+      <div class="status-row">
+        ${USERS.map(u=>{
+          const in_ = seasonBet.picks[u]!==undefined && seasonBet.picks[u]!==null;
+          return `<div class="avatar ${in_?'in':''}" title="${u}">${u.slice(0,2).toUpperCase()}</div>`;
+        }).join('')}
+        <span class="status-note">${inCount} of ${USERS.length} picks in — picks stay hidden until an admin locks them.</span>
+      </div>`;
+    if(isAdmin){
+      html += `<div class="admin-controls">
+        <button class="small-btn" onclick="toggleSeasonLock()">🔒 Lock Picks${inCount<USERS.length?' Now (not everyone has picked yet)':' for Everyone'}</button>
+      </div>`;
+    }
+  }
+  html += `</div></div>`;
+  return html;
+}
+
+function setSeasonPick(value){
+  if(seasonBet.locked){ alert('Season win total picks are locked.'); render(); return; }
+  seasonBet.picks[currentUser] = value;
+  render();
+}
+async function submitSeasonPick(){
+  if(seasonBet.locked){ alert('Season win total picks are locked.'); render(); return; }
+  const v = seasonBet.picks[currentUser];
+  if(v===undefined || v===null){ alert('Pick a win total before saving.'); return; }
+  await saveSeasonBet();
+  render();
+}
+async function toggleSeasonLock(){
+  if(!isAdmin) return;
+  seasonBet.locked = !seasonBet.locked;
+  await saveSeasonBet();
+  render();
+}
+
 function renderStandings(){
   const main = document.getElementById('main-content');
   const tally = {};
@@ -844,6 +957,63 @@ function renderStandings(){
     html += `<div class="empty-note">No games finished yet — standings will populate once results are entered.</div>`;
   }
 
+  // ---- Season Win Total tracker ----
+  html += `<div class="section-title"><h2>Season Win Total Tracker</h2><div class="rule"></div></div>`;
+  if(!seasonBet.locked){
+    html += `<div class="empty-note">Picks are hidden until an admin locks the Season Win Total on the My Picks tab.</div>`;
+  } else {
+    const actual = actualPsuWins();
+    const remaining = realGamesRemaining();
+    const totalG = realGamesTotal();
+    html += `<div class="stand-card" style="margin-bottom:16px;">
+      <div class="stand-top">
+        <div class="stand-name">Penn State's Actual Wins So Far</div>
+        <div class="stand-pts">${actual} / ${totalG}</div>
+      </div>
+      <div class="meta">${remaining} game${remaining===1?'':'s'} remaining this regular season</div>
+    </div>`;
+
+    const rows = USERS.map(u=>{
+      const target = seasonBet.picks[u];
+      return {name:u, target};
+    }).sort((a,b)=>{
+      const ad = (a.target===undefined||a.target===null) ? 999 : Math.abs(a.target-actual);
+      const bd = (b.target===undefined||b.target===null) ? 999 : Math.abs(b.target-actual);
+      return ad-bd;
+    });
+
+    rows.forEach(r=>{
+      if(r.target===undefined || r.target===null){
+        html += `<div class="stand-card">
+          <div class="stand-top"><div class="stand-name">${r.name}</div><div class="meta">No pick submitted</div></div>
+        </div>`;
+        return;
+      }
+      const diff = actual - r.target;
+      let statusHtml;
+      if(diff > 0){
+        statusHtml = `<span class="pill incorrect">Exceeded target by ${diff}</span>`;
+      } else if(diff === 0 && remaining === 0){
+        statusHtml = `<span class="pill correct">🎯 Exact! Nailed it</span>`;
+      } else if(diff === 0){
+        statusHtml = `<span class="pill">On target — ${remaining} left</span>`;
+      } else {
+        const need = -diff;
+        const possible = need <= remaining;
+        statusHtml = possible
+          ? `<span class="pill">${need} more win${need===1?'':'s'} needed (${remaining} left)</span>`
+          : `<span class="pill incorrect">Mathematically eliminated</span>`;
+      }
+      html += `<div class="stand-card">
+        <div class="stand-top">
+          <div class="stand-name">${r.name}${r.name===currentUser?' (you)':''}</div>
+          <div class="stand-pts">${r.target}</div>
+        </div>
+        <div class="meta">Predicted total wins &nbsp;·&nbsp; ${statusHtml}</div>
+      </div>`;
+    });
+  }
+
   html += `<div class="footer-note">
     Ol' State Pick'em · 2026 Penn State Football · 1 point for a correct spread pick, 1 point for a correct over/under pick.`;
   if(isAdmin){
@@ -859,8 +1029,10 @@ async function resetSeason(){
   if(!confirm("This wipes all lines, scores, and everyone's picks for the whole season. Are you sure?")) return;
   games = JSON.parse(JSON.stringify(DEFAULT_GAMES));
   picks = {};
+  seasonBet = {locked:false, picks:{}};
   await saveGames();
   await savePicks();
+  await saveSeasonBet();
   render();
 }
 </script>
