@@ -315,7 +315,6 @@ const ADMIN_NAME = "JB";
 const DEFAULT_AUTH = { "Bev":"bev2026", "JB":"jb2026", "WC":"wc2026", "Weav":"weav2026" };
 
 const DEFAULT_GAMES = [
-  {id:0,week:0,date:"Sat, Aug 22, 2026 (TEST GAME)",opponent:"Bedford",homeAway:"home",location:"University Park, PA — Beaver Stadium (exhibition test)",time:"12:00 PM ET",tv:"Peacock",psuLine:null,total:null,status:"scheduled",psuScore:null,oppScore:null,locked:false},
   {id:1,week:1,date:"Sat, Sep 5, 2026",opponent:"Marshall",homeAway:"home",location:"University Park, PA — Beaver Stadium",time:"3:30 PM ET",tv:"FS1",psuLine:null,total:null,status:"scheduled",psuScore:null,oppScore:null,locked:false},
   {id:2,week:2,date:"Sat, Sep 12, 2026",opponent:"Temple",homeAway:"away",location:"Philadelphia, PA — Lincoln Financial Field",time:"12:00 PM ET",tv:"ESPN2",psuLine:null,total:null,status:"scheduled",psuScore:null,oppScore:null,locked:false},
   {id:3,week:3,date:"Sat, Sep 19, 2026",opponent:"Buffalo",homeAway:"home",location:"University Park, PA — Beaver Stadium",time:"12:00 PM ET",tv:"Big Ten Network",psuLine:null,total:null,status:"scheduled",psuScore:null,oppScore:null,locked:false},
@@ -339,6 +338,7 @@ let seasonBet = {locked:false, picks:{}};
 let activeTab = "schedule";
 let editingLine = {};
 let editingScore = {};
+let editingInfo = {};
 let pendingName = null;
 
 // ---------------- STORAGE (Firestore) ----------------
@@ -499,6 +499,13 @@ function setTab(tab){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===tab));
   render();
 }
+function goToPick(gameId){
+  activeTab = 'picks';
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab==='picks'));
+  render();
+  const el = document.getElementById('pick-card-' + gameId);
+  if(el) el.scrollIntoView({behavior:'smooth', block:'start'});
+}
 
 // ---------------- RESULT HELPERS ----------------
 function atsResult(g){
@@ -528,7 +535,7 @@ function allPicksIn(gameId){
   return USERS.every(u => p[u] && p[u].ats && p[u].ou);
 }
 function realSeasonGames(){
-  return games.filter(g=>g.week>=1); // excludes the fictitious Week 0 test game
+  return games.filter(g=>g.week>=1); // all regular-season games
 }
 function actualPsuWins(){
   return realSeasonGames().filter(g=>g.status==='final' && g.psuScore>g.oppScore).length;
@@ -596,10 +603,14 @@ function renderSchedule(){
           <div class="line-item">O/U was: <b>${g.total===null?'—':g.total}</b></div>
           ${ats?`<span class="result-tag ${ats==='PSU'?'psu':(ats==='OPP'?'opp':'push')}">${ats==='PSU'?'PSU covered':(ats==='OPP'?g.opponent+' covered':'Push')}</span>`:''}
           ${ou?`<span class="result-tag ${ou==='OVER'?'psu':(ou==='UNDER'?'opp':'push')}">${ou==='PUSH'?'O/U Push':ou}</span>`:''}
+        </div>
+        <div class="admin-controls" style="margin-top:4px;">
+          <button class="small-btn ghost" onclick="goToPick(${g.id})">📝 View Picks &amp; Results →</button>
         </div>`;
       if(isAdmin){
         html += `<div class="admin-controls">
           <button class="small-btn ghost" onclick="toggleScoreEdit(${g.id})">${editingScore[g.id]?'Cancel':'Edit Final Score'}</button>
+          <button class="small-btn ghost" onclick="toggleInfoEdit(${g.id})">${editingInfo[g.id]?'Cancel':'Edit Kickoff / TV'}</button>
         </div>`;
         if(editingScore[g.id]){
           html += `<div class="edit-box">
@@ -610,16 +621,30 @@ function renderSchedule(){
             </div>
           </div>`;
         }
+        if(editingInfo[g.id]){
+          html += `<div class="edit-box">
+            <div class="edit-row">
+              <div class="field"><label>Date</label><input type="text" id="info-date-${g.id}" value="${g.date}" style="width:170px;"></div>
+              <div class="field"><label>Time</label><input type="text" id="info-time-${g.id}" value="${g.time}" style="width:150px;"></div>
+              <div class="field"><label>TV</label><input type="text" id="info-tv-${g.id}" value="${g.tv}" style="width:130px;"></div>
+              <button class="small-btn" onclick="saveInfo(${g.id})">Save</button>
+            </div>
+          </div>`;
+        }
       }
     } else {
       html += `<div class="line-row">
           <div class="line-item">Spread: <b>${g.psuLine===null?'Not set':(g.psuLine<0?'PSU -'+Math.abs(g.psuLine):(g.psuLine>0?'PSU +'+g.psuLine:'Even'))}</b></div>
           <div class="line-item">O/U: <b>${g.total===null?'Not set':g.total}</b></div>
+        </div>
+        <div class="admin-controls" style="margin-top:4px;">
+          <button class="small-btn ghost" onclick="goToPick(${g.id})">📝 Make Your Pick →</button>
         </div>`;
       if(isAdmin){
         html += `<div class="admin-controls">
             <button class="small-btn ghost" onclick="toggleLineEdit(${g.id})">${editingLine[g.id]?'Cancel':'Set / Edit Line'}</button>
             <button class="small-btn ghost" onclick="toggleScoreEdit(${g.id})">${editingScore[g.id]?'Cancel':'Enter Final Score'}</button>
+            <button class="small-btn ghost" onclick="toggleInfoEdit(${g.id})">${editingInfo[g.id]?'Cancel':'Edit Kickoff / TV'}</button>
           </div>`;
         if(editingLine[g.id]){
           html += `<div class="edit-box">
@@ -640,6 +665,16 @@ function renderSchedule(){
             </div>
           </div>`;
         }
+        if(editingInfo[g.id]){
+          html += `<div class="edit-box">
+            <div class="edit-row">
+              <div class="field"><label>Date</label><input type="text" id="info-date-${g.id}" value="${g.date}" style="width:170px;"></div>
+              <div class="field"><label>Time</label><input type="text" id="info-time-${g.id}" value="${g.time}" style="width:150px;"></div>
+              <div class="field"><label>TV</label><input type="text" id="info-tv-${g.id}" value="${g.tv}" style="width:130px;"></div>
+              <button class="small-btn" onclick="saveInfo(${g.id})">Save</button>
+            </div>
+          </div>`;
+        }
       }
     }
     html += `</div></div>`;
@@ -648,8 +683,9 @@ function renderSchedule(){
   main.innerHTML = html;
 }
 
-function toggleLineEdit(id){ editingLine[id] = !editingLine[id]; editingScore[id] = false; render(); }
-function toggleScoreEdit(id){ editingScore[id] = !editingScore[id]; editingLine[id] = false; render(); }
+function toggleLineEdit(id){ editingLine[id] = !editingLine[id]; editingScore[id] = false; editingInfo[id] = false; render(); }
+function toggleScoreEdit(id){ editingScore[id] = !editingScore[id]; editingLine[id] = false; editingInfo[id] = false; render(); }
+function toggleInfoEdit(id){ editingInfo[id] = !editingInfo[id]; editingLine[id] = false; editingScore[id] = false; render(); }
 
 async function saveLine(id){
   if(!isAdmin) return;
@@ -675,6 +711,19 @@ async function saveScore(id){
   await saveGames();
   render();
 }
+async function saveInfo(id){
+  if(!isAdmin) return;
+  const date = document.getElementById(`info-date-${id}`).value.trim();
+  const time = document.getElementById(`info-time-${id}`).value.trim();
+  const tv = document.getElementById(`info-tv-${id}`).value.trim();
+  const g = games.find(x=>x.id===id);
+  if(date) g.date = date;
+  if(time) g.time = time;
+  if(tv) g.tv = tv;
+  editingInfo[id] = false;
+  await saveGames();
+  render();
+}
 
 function renderPicks(){
   const main = document.getElementById('main-content');
@@ -696,7 +745,7 @@ function renderPicks(){
     const revealed = !!g.locked;
     const inCount = USERS.filter(u=>picks[g.id]&&picks[g.id][u]&&picks[g.id][u].ats&&picks[g.id][u].ou).length;
 
-    html += `<div class="card">
+    html += `<div class="card" id="pick-card-${g.id}">
       <div class="card-head">
         <div class="gh-left">
           <div class="wk">Week ${g.week}</div>
@@ -756,7 +805,8 @@ function renderPicks(){
             return `<div class="avatar ${in_?'in':''}" title="${u}">${u.slice(0,2).toUpperCase()}</div>`;
           }).join('')}
           <span class="status-note">${inCount} of ${USERS.length} picks in — picks stay hidden until an admin locks them.</span>
-        </div>`;
+        </div>
+        <div class="meta" style="margin-top:6px;">⏰ Reminder: the admin will lock picks for this game about 2 hours before kickoff — get your picks in before then!</div>`;
       if(isAdmin){
         html += `<div class="admin-controls">
           <button class="small-btn" onclick="toggleLock(${g.id})">🔒 Lock Picks${inCount<USERS.length?' Now (not everyone has picked yet)':' for Everyone'}</button>
@@ -772,7 +822,7 @@ function renderPicks(){
       const ll = lineLabel(g);
       const ats = atsResult(g);
       const ou = ouResult(g);
-      html += `<div class="card final">
+      html += `<div class="card final" id="pick-card-${g.id}">
         <div class="card-head">
           <div class="gh-left">
             <div class="wk">Week ${g.week}</div>
@@ -844,7 +894,7 @@ function seasonBetCardHTML(){
       <div class="gh-left">
         <div class="wk">One Pick For The Whole Season</div>
         <div class="matchup">Total Regular-Season Wins (0–12)</div>
-        <div class="meta">Based on Weeks 1–12 only — the Week 0 test game never counts.</div>
+        <div class="meta">Based on the full 12-game regular season.</div>
       </div>
     </div>
     <div class="card-body">`;
